@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     CheckConstraint,
+    Column,
     DateTime,
     Enum,
     ForeignKey,
@@ -31,8 +32,8 @@ def utcnow() -> datetime:
 issue_labels = Table(
     "issue_labels",
     Base.metadata,
-    mapped_column("issue_id", ForeignKey("issues.id", ondelete="CASCADE"), primary_key=True),
-    mapped_column("label_id", ForeignKey("labels.id", ondelete="CASCADE"), primary_key=True),
+    Column("issue_id", ForeignKey("issues.id", ondelete="CASCADE"), primary_key=True),
+    Column("label_id", ForeignKey("labels.id", ondelete="CASCADE"), primary_key=True),
     UniqueConstraint("issue_id", "label_id", name="uq_issue_labels_pair"),
     Index("ix_issue_labels_issue_id", "issue_id"),
     Index("ix_issue_labels_label_id", "label_id"),
