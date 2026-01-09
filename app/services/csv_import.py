@@ -3,10 +3,12 @@ from io import StringIO
 
 from sqlalchemy.orm import Session
 
+from app.crud.issues import apply_resolved_at
 from app.crud.labels import get_or_create_labels
 from app.crud.users import get_user_by_email
 from app.enums import IssueStatus
 from app.models import Issue
+from app.services.timeline import log_event
 
 
 REQUIRED_COLUMNS = {"title", "description", "status", "assignee_email", "labels"}
@@ -15,7 +17,15 @@ REQUIRED_COLUMNS = {"title", "description", "status", "assignee_email", "labels"
 def _parse_labels(raw: str | None) -> list[str]:
     if not raw:
         return []
-    return [token.strip() for token in raw.split(";") if token.strip()]
+    labels: list[str] = []
+    seen = set()
+    for token in raw.split(";"):
+        cleaned = token.strip()
+        if not cleaned or cleaned in seen:
+            continue
+        labels.append(cleaned)
+        seen.add(cleaned)
+    return labels
 
 
 def _parse_status(raw: str | None) -> IssueStatus | None:
@@ -88,11 +98,13 @@ def import_issues_from_csv(db: Session, content: str) -> dict:
             status=payload["status"],
             assignee_id=payload["assignee_id"],
         )
+        apply_resolved_at(issue, payload["status"])
         db.add(issue)
         db.flush()
         if payload["labels"]:
             labels = get_or_create_labels(db, payload["labels"])
             issue.labels = labels
+        log_event(db, issue.id, "issue.created", {"status": issue.status, "assignee_id": issue.assignee_id})
         created_count += 1
 
     return {

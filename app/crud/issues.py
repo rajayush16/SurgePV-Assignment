@@ -64,9 +64,10 @@ def list_issues(
     if assignee_id is not None:
         stmt = stmt.where(Issue.assignee_id == assignee_id)
     if label:
-        stmt = stmt.join(issue_labels).join(Label).where(Label.name == label)
+        stmt = stmt.join(issue_labels).join(Label).where(Label.name == label).distinct(Issue.id)
 
-    total_stmt = select(func.count()).select_from(stmt.subquery())
+    count_subq = stmt.with_only_columns(Issue.id).subquery()
+    total_stmt = select(func.count(func.distinct(count_subq.c.id)))
 
     sort_col = Issue.created_at if sort == "created_at" else Issue.created_at
     if order == "asc":
@@ -87,6 +88,7 @@ def update_issue(
     description: str | None,
     status: IssueStatus | None,
     assignee_id: int | None,
+    assignee_provided: bool,
 ) -> Issue:
     if title is not None:
         issue.title = title
@@ -95,7 +97,7 @@ def update_issue(
     if status is not None:
         issue.status = status
         apply_resolved_at(issue, status)
-    if assignee_id is not None or assignee_id is None:
+    if assignee_provided:
         issue.assignee_id = assignee_id
     issue.updated_at = _utcnow()
     issue.version += 1

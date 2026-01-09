@@ -13,10 +13,10 @@ def _utcnow() -> datetime:
 
 def bulk_update_status(
     db: Session, issue_ids: list[int], new_status: IssueStatus
-) -> tuple[int, list[dict]]:
+) -> tuple[list[int], list[dict]]:
     errors: list[dict] = []
     if not issue_ids:
-        return 0, errors
+        return [], errors
 
     issues = list(
         db.scalars(select(Issue).where(Issue.id.in_(issue_ids)).with_for_update())
@@ -25,7 +25,7 @@ def bulk_update_status(
     missing = [issue_id for issue_id in issue_ids if issue_id not in issues_by_id]
     if missing:
         errors.append({"issue_ids": missing, "reason": "Issue not found"})
-        return 0, errors
+        return [], errors
 
     for issue in issues:
         if new_status in (IssueStatus.resolved, IssueStatus.closed) and issue.assignee_id is None:
@@ -34,7 +34,7 @@ def bulk_update_status(
             errors.append({"issue_id": issue.id, "reason": "Cannot close directly from open"})
 
     if errors:
-        return 0, errors
+        return [], errors
 
     now = _utcnow()
     for issue in issues:
@@ -47,4 +47,4 @@ def bulk_update_status(
             issue.resolved_at = None
         issue.version += 1
         db.add(issue)
-    return len(issues), errors
+    return [issue.id for issue in issues], errors

@@ -62,6 +62,13 @@ class IssueBase(BaseModel):
     status: IssueStatus | None = None
     assignee_id: int | None = None
 
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        if not value or not value.strip():
+            raise ValueError("Title is required")
+        return value.strip()
+
 
 class IssueCreate(IssueBase):
     title: str
@@ -74,6 +81,13 @@ class IssueUpdate(BaseModel):
     status: IssueStatus | None = None
     assignee_id: int | None = None
     version: int
+
+    @field_validator("version")
+    @classmethod
+    def validate_version(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("Version must be >= 1")
+        return value
 
 
 class IssueOut(BaseModel):
