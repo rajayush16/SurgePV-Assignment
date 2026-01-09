@@ -16,6 +16,7 @@ from app.schemas import (
     CommentCreate,
     CommentOut,
     CsvImportSummary,
+    IssueEventOut,
     IssueCreate,
     IssueListResponse,
     IssueOut,
@@ -87,7 +88,8 @@ def update_issue(issue_id: int, payload: IssueUpdate, db: Session = Depends(get_
         updates.get("title"),
         updates.get("description"),
         updates.get("status"),
-        updates.get("assignee_id") if "assignee_id" in updates else None,
+        updates.get("assignee_id"),
+        "assignee_id" in updates,
     )
     log_event(db, issue.id, "issue.updated", updates)
     db.commit()
@@ -125,13 +127,14 @@ def replace_labels(issue_id: int, payload: LabelsUpdate, db: Session = Depends(g
 
 @router.post("/bulk-status", response_model=BulkStatusResult)
 def bulk_status(payload: BulkStatusRequest, db: Session = Depends(get_db)) -> BulkStatusResult:
-    updated, errors = bulk_update_status(db, payload.issue_ids, payload.new_status)
+    updated_ids, errors = bulk_update_status(db, payload.issue_ids, payload.new_status)
     if errors:
         db.rollback()
         raise bad_request("BULK_STATUS_FAILED", "Bulk status update failed", {"errors": errors})
-    log_event(db, payload.issue_ids[0], "bulk.status", {"issue_ids": payload.issue_ids, "status": payload.new_status})
+    for issue_id in updated_ids:
+        log_event(db, issue_id, "bulk.status", {"status": payload.new_status})
     db.commit()
-    return BulkStatusResult(updated=updated)
+    return BulkStatusResult(updated=len(updated_ids))
 
 
 @router.post("/import", response_model=CsvImportSummary)
@@ -145,10 +148,10 @@ async def import_issues(file: UploadFile = File(...), db: Session = Depends(get_
     return summary
 
 
-@router.get("/{issue_id}/timeline")
-def timeline(issue_id: int, db: Session = Depends(get_db)) -> list[dict]:
+@router.get("/{issue_id}/timeline", response_model=list[IssueEventOut])
+def timeline(issue_id: int, db: Session = Depends(get_db)) -> list[IssueEventOut]:
     issue = issue_crud.get_issue(db, issue_id)
     if issue is None:
         raise not_found("Issue", {"issue_id": issue_id})
     events = get_timeline(db, issue_id)
-    return [event.__dict__ for event in events]
+    return events
